@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const OFFICIAL_BRANDS = [
+const TARGET_BRANDS = [
     // --- โซเชียลมีเดียยอดนิยมในไทย ---
     { name: 'Instagram', keywords: ['instagram', 'instagam', 'instgram', 'instagrm'], officialDomains: ['instagram.com', 'ig.me'] },
     { name: 'TikTok', keywords: ['tiktok', 'tik-tok', 'tikt0k'], officialDomains: ['tiktok.com', 'tiktokv.com', 'byteoversea.com'] },
