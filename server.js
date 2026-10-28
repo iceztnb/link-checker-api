@@ -7,17 +7,26 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const TARGET_BRANDS = [
-  { name: 'Facebook', domain: 'facebook.com', keywords: ['facebook', 'facebooc', 'facebk', 'fb-login'] },
-  { name: 'Google', domain: 'google.com', keywords: ['google', 'g00gle', 'googl'] },
-  { name: 'LINE', domain: 'line.me', keywords: ['line-me', 'line-login', 'line-th'] },
-  { name: 'Kasikorn Bank (KBank)', domain: 'kasikornbank.com', keywords: ['kasikorn', 'kbank', 'kasikorn-online'] },
-  { name: 'SCB', domain: 'scb.co.th', keywords: ['scb', 'scbeasy', 'scb-credit'] },
-  { name: 'Krungthai (KTB)', domain: 'krungthai.com', keywords: ['krungthai', 'ktb', 'krungthai-next'] },
-  { name: 'Shopee', domain: 'shopee.co.th', keywords: ['shopee', 'shope-th'] },
-  { name: 'Lazada', domain: 'lazada.co.th', keywords: ['lazada', 'laz-th'] },
-  { name: 'TikTok', domain: 'tiktok.com', keywords: ['tiktok', 'tiktok-th'] },
-  { name: 'Netflix', domain: 'netflix.com', keywords: ['netflix', 'netfllx'] }
+const OFFICIAL_BRANDS = [
+    // --- โซเชียลมีเดียยอดนิยมในไทย ---
+    { name: 'Instagram', keywords: ['instagram', 'instagam', 'instgram', 'instagrm'], officialDomains: ['instagram.com', 'ig.me'] },
+    { name: 'TikTok', keywords: ['tiktok', 'tik-tok', 'tikt0k'], officialDomains: ['tiktok.com', 'tiktokv.com', 'byteoversea.com'] },
+    { name: 'Facebook', keywords: ['facebook', 'facebooc', 'faceb0ok', 'facebok', 'fb'], officialDomains: ['facebook.com', 'fb.com', 'messenger.com'] },
+    { name: 'LINE', keywords: ['line', 'line-me', 'line-official', 'liff'], officialDomains: ['line.me', 'line.naver.jp', 'line-apps.com'] },
+    { name: 'X (Twitter)', keywords: ['twitter', 'twittwer', 'x.com'], officialDomains: ['twitter.com', 'x.com'] },
+    { name: 'YouTube', keywords: ['youtube', 'youtub', 'yotube'], officialDomains: ['youtube.com', 'youtu.be'] },
+
+    // --- แบงก์และกระเป๋าเงินในไทย ---
+    { name: 'Kasikorn Bank (KBank)', keywords: ['kasikornbank', 'kasikorn', 'kbank', 'kasik0rn'], officialDomains: ['kasikornbank.com', 'kasikornsecurities.com'] },
+    { name: 'Siam Commercial Bank (SCB)', keywords: ['scb', 'scbeasy', 'scbx'], officialDomains: ['scb.co.th', 'scbx.com'] },
+    { name: 'Krungthai Bank (KTB)', keywords: ['krungthai', 'ktb', 'krungthaibank'], officialDomains: ['krungthai.com', 'ktb.co.th'] },
+    { name: 'Bangkok Bank', keywords: ['bangkokbank', 'bualuang'], officialDomains: ['bangkokbank.com'] },
+    { name: 'Krungsri Bank', keywords: ['krungsri', 'bay'], officialDomains: ['krungsri.com'] },
+    { name: 'TrueMoney', keywords: ['truemoney', 'truemoneywallet', 'tmn'], officialDomains: ['truemoney.com'] },
+
+    // --- ช้อปปิ้งออนไลน์ ---
+    { name: 'Shopee', keywords: ['shopee', 'shope'], officialDomains: ['shopee.co.th', 'shopee.com'] },
+    { name: 'Lazada', keywords: ['lazada', 'lazad'], officialDomains: ['lazada.co.th', 'lazada.com'] }
 ];
 
 const PHISHING_KEYWORDS = [
