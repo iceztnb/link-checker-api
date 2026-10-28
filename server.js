@@ -7,189 +7,118 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// ข้อมูลแบรนด์และโซเชียลมีเดีย
 const TARGET_BRANDS = [
-    // --- โซเชียลมีเดียยอดนิยมในไทย ---
     { name: 'Instagram', keywords: ['instagram', 'instagam', 'instgram', 'instagrm'], officialDomains: ['instagram.com', 'ig.me'] },
     { name: 'TikTok', keywords: ['tiktok', 'tik-tok', 'tikt0k'], officialDomains: ['tiktok.com', 'tiktokv.com', 'byteoversea.com'] },
     { name: 'Facebook', keywords: ['facebook', 'facebooc', 'faceb0ok', 'facebok', 'fb'], officialDomains: ['facebook.com', 'fb.com', 'messenger.com'] },
     { name: 'LINE', keywords: ['line', 'line-me', 'line-official', 'liff'], officialDomains: ['line.me', 'line.naver.jp', 'line-apps.com'] },
     { name: 'X (Twitter)', keywords: ['twitter', 'twittwer', 'x.com'], officialDomains: ['twitter.com', 'x.com'] },
-    { name: 'YouTube', keywords: ['youtube', 'youtub', 'yotube'], officialDomains: ['youtube.com', 'youtu.be'] },
-
-    // --- แบงก์และกระเป๋าเงินในไทย ---
-    { name: 'Kasikorn Bank (KBank)', keywords: ['kasikornbank', 'kasikorn', 'kbank', 'kasik0rn'], officialDomains: ['kasikornbank.com', 'kasikornsecurities.com'] },
-    { name: 'Siam Commercial Bank (SCB)', keywords: ['scb', 'scbeasy', 'scbx'], officialDomains: ['scb.co.th', 'scbx.com'] },
-    { name: 'Krungthai Bank (KTB)', keywords: ['krungthai', 'ktb', 'krungthaibank'], officialDomains: ['krungthai.com', 'ktb.co.th'] },
-    { name: 'Bangkok Bank', keywords: ['bangkokbank', 'bualuang'], officialDomains: ['bangkokbank.com'] },
-    { name: 'Krungsri Bank', keywords: ['krungsri', 'bay'], officialDomains: ['krungsri.com'] },
-    { name: 'TrueMoney', keywords: ['truemoney', 'truemoneywallet', 'tmn'], officialDomains: ['truemoney.com'] },
-
-    // --- ช้อปปิ้งออนไลน์ ---
-    { name: 'Shopee', keywords: ['shopee', 'shope'], officialDomains: ['shopee.co.th', 'shopee.com'] },
-    { name: 'Lazada', keywords: ['lazada', 'lazad'], officialDomains: ['lazada.co.th', 'lazada.com'] }
+    { name: 'YouTube', keywords: ['youtube', 'youtub', 'yotube'], officialDomains: ['youtube.com', 'youtu.be'] }
 ];
 
-const PHISHING_KEYWORDS = [
-  'login', 'signin', 'verify', 'update-account', 'secure-bank', 
-  'free-gift', 'bonus', 'claim', 'wallet', 'otp', 'reward', 'cashback', 'loan'
-];
-
-function calculateLevenshtein(a, b) {
-  const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
-  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
-  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
-
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
-      );
+// ฟังก์ชันคำนวณ Levenshtein Distance สำหรับเช็ก Typosquatting
+function calculateLevenshteinDistance(a, b) {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+            }
+        }
     }
-  }
-  return matrix[a.length][b.length];
+    return matrix[b.length][a.length];
+}
+
+function getSimilarityRatio(s1, s2) {
+    const longer = s1.length > s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    const distance = calculateLevenshteinDistance(s1, s2);
+    return (longer.length - distance) / parseFloat(longer.length);
 }
 
 function analyzeUrl(inputUrl) {
-  let urlObj;
-  let formattedUrl = inputUrl.trim();
-  if (!/^https?:\/\//i.test(formattedUrl)) {
-    formattedUrl = 'http://' + formattedUrl;
-  }
-
-  try {
-    urlObj = new URL(formattedUrl);
-  } catch (e) {
-    return { error: 'รูปแบบ URL ไม่ถูกต้อง' };
-  }
-
-  const hostname = urlObj.hostname.toLowerCase();
-  const protocol = urlObj.protocol;
-  const fullPath = (urlObj.pathname + urlObj.search).toLowerCase();
-
-  let riskScore = 0;
-  const findings = [];
-
-  // 1. HTTP Protocol
-  if (protocol === 'http:') {
-    riskScore += 25;
-    findings.push({
-      type: 'warning',
-      title: 'ใช้โปรโตคอล HTTP แบบไม่ปลอดภัย',
-      desc: 'ลิงก์นี้ไม่มีการเข้ารหัส SSL/TLS (http://) ข้อมูลที่รับส่งอาจถูกดักจับได้'
-    });
-  }
-
-  // 2. Typosquatting Check
-  for (const brand of TARGET_BRANDS) {
-    const mainDomain = brand.domain;
-    if (hostname === mainDomain || hostname.endsWith('.' + mainDomain)) {
-      continue;
+    let formattedUrl = inputUrl;
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+        formattedUrl = 'http://' + formattedUrl;
     }
 
-    let detectedImpersonation = false;
-    let similarityPercent = 0;
+    try {
+        const parsed = new URL(formattedUrl);
+        const protocol = parsed.protocol.replace(':', '').toLowerCase();
+        const hostname = parsed.hostname.toLowerCase();
+        const pathname = parsed.pathname + parsed.search + parsed.hash;
 
-    for (const kw of brand.keywords) {
-      if (hostname.includes(kw)) {
-        detectedImpersonation = true;
-        similarityPercent = 90;
-        break;
-      }
+        let riskScore = 0;
+        let findings = [];
 
-      const baseHost = hostname.replace(/^www\./, '').split('.')[0];
-      const baseBrand = mainDomain.split('.')[0];
-      const dist = calculateLevenshtein(baseHost, baseBrand);
-      const maxLen = Math.max(baseHost.length, baseBrand.length);
-      const sim = Math.round((1 - dist / maxLen) * 100);
+        if (protocol !== 'https') {
+            riskScore += 25;
+            findings.push({
+                severity: 'high',
+                category: 'Protocol',
+                title: 'ไม่มีการเข้ารหัสความปลอดภัย (HTTP)',
+                desc: 'เว็บไซต์นี้ไม่ได้ใช้ HTTPS เสี่ยงต่อการถูกดักจับข้อมูล'
+            });
+        }
 
-      if (sim >= 70 && sim < 100) {
-        detectedImpersonation = true;
-        similarityPercent = sim;
-        break;
-      }
+        const hostParts = hostname.split('.');
+        let mainDomain = hostParts.length > 2 ? hostParts.slice(-2).join('.') : hostname;
+        let rootName = mainDomain.split('.')[0];
+
+        TARGET_BRANDS.forEach(brand => {
+            const isOfficial = brand.officialDomains.some(d => hostname === d || hostname.endsWith('.' + d));
+            if (!isOfficial) {
+                brand.officialDomains.forEach(offDom => {
+                    const targetName = offDom.split('.')[0];
+                    const similarity = getSimilarityRatio(rootName, targetName);
+                    if (similarity >= 0.70) {
+                        riskScore += 60;
+                        findings.push({
+                            severity: 'critical',
+                            category: 'Typosquatting',
+                            title: `ตรวจพบการสะกดเลียนแบบแบรนด์ ${brand.name}`,
+                            desc: `โดเมน "${rootName}" มีความคล้ายคลึงกับเว็บทางการ "${targetName}" เข้าข่ายมิจฉาชีพปลอมแปลงเว็บ`
+                        });
+                    }
+                });
+            }
+        });
+
+        riskScore = Math.min(riskScore, 100);
+
+        return {
+            riskScore,
+            findings,
+            details: {
+                protocol,
+                hostname,
+                subdomain: hostParts.length > 2 ? hostParts.slice(0, -2).join('.') : 'ไม่มี',
+                pathname
+            }
+        };
+    } catch (e) {
+        return { error: 'รูปแบบ URL ไม่ถูกต้อง' };
     }
-
-    if (detectedImpersonation) {
-      riskScore += 55;
-      findings.push({
-        type: 'danger',
-        title: `ตรวจพบการสวมรอยแบรนด์ (${brand.name})`,
-        desc: `โดเมน "${hostname}" เลียนแบบแบรนด์ ${brand.name} (ความคล้ายคลึง ~${similarityPercent}%) แต่ไม่ใช่เว็บทางการ (${brand.domain})`
-      });
-      break;
-    }
-  }
-
-  // 3. Raw IP Check
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {
-    riskScore += 30;
-    findings.push({
-      type: 'warning',
-      title: 'ใช้ IP Address แทนชื่อโดเมน',
-      desc: 'มิจฉาชีพมักใช้ IP Address โดยตรงเพื่อหลีกเลี่ยงการลงทะเบียนชื่อโดเมน'
-    });
-  }
-
-  // 4. Subdomain Stacking
-  const domainParts = hostname.split('.');
-  if (domainParts.length > 3) {
-    riskScore += 15;
-    findings.push({
-      type: 'warning',
-      title: 'มีการใช้ Subdomain ซ้อนหลายชั้น',
-      desc: `พบชื่อโดเมนย่อย ${domainParts.length - 2} ชั้น ซึ่งอาจใช้หลอกตาให้ดูเหมือนเว็บจริง`
-    });
-  }
-
-  // 5. Suspicious Keywords
-  const foundKeywords = PHISHING_KEYWORDS.filter(kw => hostname.includes(kw) || fullPath.includes(kw));
-  if (foundKeywords.length > 0) {
-    riskScore += 20;
-    findings.push({
-      type: 'warning',
-      title: 'พบคำค้นหาสุ่มเสี่ยงมิจฉาชีพ',
-      desc: `พบคำว่า [${foundKeywords.join(', ')}] ซึ่งนิยมใช้ในหน้าเว็บตกทอง หรือหน้าดูดรหัสผ่าน`
-    });
-  }
-
-  riskScore = Math.min(100, riskScore);
-  let status = 'normal';
-  let statusText = 'ปกติ (ไม่พบความผิดปกติเชิงโครงสร้าง)';
-  let color = 'green';
-
-  if (riskScore >= 70) {
-    status = 'danger';
-    statusText = 'อันตรายสูง (มีแนวโน้มเป็นลิงก์ปลอม / Phishing)';
-    color = 'red';
-  } else if (riskScore >= 30) {
-    status = 'warning';
-    statusText = 'ควรระวัง (พบจุดน่าสงสัยบางประการ)';
-    color = 'yellow';
-  }
-
-  return {
-    url: formattedUrl,
-    hostname,
-    riskScore,
-    status,
-    statusText,
-    color,
-    findings,
-    analyzedAt: new Date().toISOString()
-  };
 }
 
+// Route หลักสำหรับเช็กลิงก์
 app.post('/api/check-link', (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'กรุณาระบุ URL ที่ต้องการตรวจสอบ' });
-  const result = analyzeUrl(url);
-  if (result.error) return res.status(400).json(result);
-  return res.json(result);
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'กรุณาระบุ URL' });
+    const result = analyzeUrl(url);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
 });
 
-app.get('/', (req, res) => res.send('Link Guard API Online!'));
+app.get('/', (req, res) => {
+    res.send('Link Guard API Online!');
+});
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
